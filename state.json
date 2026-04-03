@@ -1,1 +1,338 @@
-{}
+{
+  "124760": {
+    "name": "Nicolas BAY",
+    "assistants": []
+  },
+  "126699": {
+    "name": "Gilles PENNELLE",
+    "assistants": []
+  },
+  "131580": {
+    "name": "Jordan BARDELLA",
+    "assistants": []
+  },
+  "135511": {
+    "name": "Valérie HAYER",
+    "assistants": []
+  },
+  "189065": {
+    "name": "France JAMET",
+    "assistants": []
+  },
+  "197494": {
+    "name": "Nathalie LOISEAU",
+    "assistants": []
+  },
+  "197500": {
+    "name": "Mounir SATOURI",
+    "assistants": []
+  },
+  "197502": {
+    "name": "Marie-Pierre VEDRENNE",
+    "assistants": []
+  },
+  "197503": {
+    "name": "David CORMAND",
+    "assistants": []
+  },
+  "197504": {
+    "name": "Jérémy DECERLE",
+    "assistants": []
+  },
+  "197529": {
+    "name": "Leila CHAIBI",
+    "assistants": []
+  },
+  "197533": {
+    "name": "Manon AUBRY",
+    "assistants": []
+  },
+  "197534": {
+    "name": "François-Xavier BELLAMY",
+    "assistants": []
+  },
+  "197543": {
+    "name": "Bernard GUETTA",
+    "assistants": []
+  },
+  "197557": {
+    "name": "Christophe GRUDLER",
+    "assistants": []
+  },
+  "197574": {
+    "name": "Damien CARÊME",
+    "assistants": []
+  },
+  "197577": {
+    "name": "Gilles BOYER",
+    "assistants": []
+  },
+  "197581": {
+    "name": "Stéphanie YON-COURTIN",
+    "assistants": []
+  },
+  "197589": {
+    "name": "Laurence FARRENG",
+    "assistants": []
+  },
+  "197623": {
+    "name": "Thierry MARIANI",
+    "assistants": []
+  },
+  "197627": {
+    "name": "Virginie JORON",
+    "assistants": []
+  },
+  "197628": {
+    "name": "Jean-Paul GARRAUD",
+    "assistants": []
+  },
+  "197687": {
+    "name": "Philippe OLIVIER",
+    "assistants": []
+  },
+  "197690": {
+    "name": "André ROUGÉ",
+    "assistants": []
+  },
+  "197691": {
+    "name": "Mathilde ANDROUËT",
+    "assistants": []
+  },
+  "197694": {
+    "name": "Raphaël GLUCKSMANN",
+    "assistants": []
+  },
+  "197697": {
+    "name": "Aurore LALUCQ",
+    "assistants": []
+  },
+  "200345": {
+    "name": "Pierre-Romain THIONNET",
+    "assistants": []
+  },
+  "204418": {
+    "name": "Nora MEBAREK",
+    "assistants": []
+  },
+  "204419": {
+    "name": "Sandro GOZI",
+    "assistants": []
+  },
+  "22858": {
+    "name": "Fabienne KELLER",
+    "assistants": []
+  },
+  "236050": {
+    "name": "Marie DAUCHY",
+    "assistants": []
+  },
+  "236053": {
+    "name": "Marina MESURE",
+    "assistants": []
+  },
+  "245018": {
+    "name": "Christophe CLERGEAU",
+    "assistants": []
+  },
+  "256869": {
+    "name": "Grégory ALLIONE",
+    "assistants": []
+  },
+  "256870": {
+    "name": "Valérie DEVAUX",
+    "assistants": []
+  },
+  "256871": {
+    "name": "Malika SOREL",
+    "assistants": []
+  },
+  "256872": {
+    "name": "Fabrice LEGGERI",
+    "assistants": []
+  },
+  "256874": {
+    "name": "Mélanie DISDIER",
+    "assistants": []
+  },
+  "256875": {
+    "name": "Matthieu VALET",
+    "assistants": []
+  },
+  "256876": {
+    "name": "Anne-Sophie FRIGOUT",
+    "assistants": []
+  },
+  "256877": {
+    "name": "Pascale PIERA",
+    "assistants": []
+  },
+  "256878": {
+    "name": "Marie-Luce BRASIER-CLAIN",
+    "assistants": []
+  },
+  "256882": {
+    "name": "Julie RECHAGNEUX",
+    "assistants": []
+  },
+  "256883": {
+    "name": "Aleksandar NIKOLIC",
+    "assistants": []
+  },
+  "256886": {
+    "name": "Valérie DELOGE",
+    "assistants": []
+  },
+  "256888": {
+    "name": "Rody TOLASSY",
+    "assistants": []
+  },
+  "256893": {
+    "name": "Pierre PIMPIE",
+    "assistants": []
+  },
+  "256894": {
+    "name": "Sylvie JOSSERAND",
+    "assistants": []
+  },
+  "256895": {
+    "name": "Julien LEONARDELLI",
+    "assistants": []
+  },
+  "256896": {
+    "name": "Angéline FURET",
+    "assistants": []
+  },
+  "256897": {
+    "name": "Gaëtan DUSSAUSAYE",
+    "assistants": []
+  },
+  "256898": {
+    "name": "Pierre JOUVET",
+    "assistants": []
+  },
+  "256899": {
+    "name": "Murielle LAURENT",
+    "assistants": []
+  },
+  "256901": {
+    "name": "Jean-Marc GERMAIN",
+    "assistants": []
+  },
+  "256902": {
+    "name": "Emma RAFOWICZ",
+    "assistants": []
+  },
+  "256903": {
+    "name": "Thomas PELLERIN-CARLIN",
+    "assistants": []
+  },
+  "256904": {
+    "name": "Chloé RIDEL",
+    "assistants": []
+  },
+  "256905": {
+    "name": "Eric SARGIACOMO",
+    "assistants": []
+  },
+  "256906": {
+    "name": "Claire FITA",
+    "assistants": []
+  },
+  "256908": {
+    "name": "François KALFON",
+    "assistants": []
+  },
+  "256910": {
+    "name": "Anthony SMITH",
+    "assistants": []
+  },
+  "256911": {
+    "name": "Arash SAEIDI",
+    "assistants": []
+  },
+  "256912": {
+    "name": "Rima HASSAN",
+    "assistants": []
+  },
+  "256913": {
+    "name": "Emma FOURREAU",
+    "assistants": []
+  },
+  "256915": {
+    "name": "Mélissa CAMARA",
+    "assistants": []
+  },
+  "256917": {
+    "name": "Majdouline SBAI",
+    "assistants": []
+  },
+  "256918": {
+    "name": "Céline IMART",
+    "assistants": []
+  },
+  "256919": {
+    "name": "Christophe GOMART",
+    "assistants": []
+  },
+  "256920": {
+    "name": "Isabelle LE CALLENNEC",
+    "assistants": []
+  },
+  "256921": {
+    "name": "Laurent CASTILLO",
+    "assistants": []
+  },
+  "256922": {
+    "name": "Marion MARÉCHAL",
+    "assistants": []
+  },
+  "256924": {
+    "name": "Sarah KNAFO",
+    "assistants": []
+  },
+  "256925": {
+    "name": "Laurence TROCHU",
+    "assistants": []
+  },
+  "261796": {
+    "name": "Séverine WERBROUCK",
+    "assistants": []
+  },
+  "261797": {
+    "name": "Christophe BAY",
+    "assistants": []
+  },
+  "30123": {
+    "name": "Guillaume PELTIER",
+    "assistants": []
+  },
+  "30482": {
+    "name": "Younous OMARJEE",
+    "assistants": []
+  },
+  "5736": {
+    "name": "Alexandre VARAUT",
+    "assistants": []
+  },
+  "72779": {
+    "name": "Nadine MORANO",
+    "assistants": []
+  },
+  "88552": {
+    "name": "Julien SANCHEZ",
+    "assistants": []
+  },
+  "94649": {
+    "name": "Catherine GRISET",
+    "assistants": []
+  },
+  "96711": {
+    "name": "Pascal CANFIN",
+    "assistants": []
+  },
+  "97236": {
+    "name": "Marie TOUSSAINT",
+    "assistants": []
+  }
+}
