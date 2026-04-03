@@ -29,7 +29,7 @@ TELEGRAM_CHANNEL = "@cavaparlement"
 STATE_FILE   = "state.json"
 EP_API_BASE  = "https://data.europarl.europa.eu/api/v2"
 EP_SITE_BASE = "https://www.europarl.europa.eu"
-CURRENT_TERM = 10   # législature 2024-2029
+CURRENT_TERM = 10
 
 HEADERS = {
     "User-Agent": "CavaEuroparl/1.0 (@cavaeuroparl.bsky.social) - Civic transparency bot",
@@ -42,13 +42,70 @@ API_HEADERS = {
 
 ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
 
-# ─── Session HTTP avec retry automatique ──────────────────────────────────────
+# ─── Groupes politiques ───────────────────────────────────────────────────────
+
+# Correspondance entre les identifiants de l'API EP et un label lisible
+GROUP_LABELS = {
+    "PPE":        "PPE",
+    "SD":         "S&D",
+    "S-D":        "S&D",
+    "RENEW":      "Renew Europe",
+    "VERTS-ALE":  "Verts/ALE",
+    "ECR":        "ECR",
+    "THE-LEFT":   "La Gauche",
+    "LEFT":       "La Gauche",
+    "ESN":        "ESN",
+    "PFE":        "Patriotes pour l'Europe",
+    "NI":         "Non-inscrit·e",
+}
+
+GROUP_EMOJIS = {
+    "PPE":        "🔵",
+    "SD":         "🔴",
+    "S-D":        "🔴",
+    "RENEW":      "🟡",
+    "VERTS-ALE":  "🟢",
+    "ECR":        "🟤",
+    "THE-LEFT":   "☭",
+    "LEFT":       "☭",
+    "ESN":        "⚫",
+    "PFE":        "🟠",
+    "NI":         "⚪",
+}
+
+# ─── Types d'assistants ───────────────────────────────────────────────────────
+
+TYPE_EMOJIS = {
+    "accredited assistants":            "🏛️",
+    "accredited assistants (grouping)":  "🏛️",
+    "local assistants":                 "📍",
+    "local assistants (grouping)":      "📍",
+    "specialised service providers":    "🔧",
+    "paying agents":                    "💶",
+    "paying agents (grouping)":         "💶",
+    "trainees":                         "🎓",
+    "assistants to the vice-presidency/to the quaestorate": "⭐",
+}
+
+TYPE_LABELS_FR = {
+    "accredited assistants":            "Accrédité·e (Bruxelles/Strasbourg)",
+    "accredited assistants (grouping)": "Accrédité·e mutualisé·e",
+    "local assistants":                 "Assistant·e local·e (France)",
+    "local assistants (grouping)":      "Assistant·e local·e mutualisé·e",
+    "specialised service providers":    "Prestataire de services",
+    "paying agents":                    "Agent payeur",
+    "paying agents (grouping)":         "Agent payeur mutualisé",
+    "trainees":                         "Stagiaire",
+    "assistants to the vice-presidency/to the quaestorate": "Assistant·e VP/Questeur",
+}
+
+
+# ─── Session HTTP ─────────────────────────────────────────────────────────────
 
 def make_session() -> requests.Session:
     session = requests.Session()
     retry = Retry(
-        total=3,
-        backoff_factor=2,
+        total=3, backoff_factor=2,
         status_forcelist=[429, 500, 502, 503, 504],
         allowed_methods=["GET"],
     )
@@ -59,37 +116,57 @@ def make_session() -> requests.Session:
 
 SESSION = make_session()
 
-# ─── Types : emojis et labels ─────────────────────────────────────────────────
 
-TYPE_EMOJIS = {
-    "accredited assistants":           "🏛️",
-    "accredited assistants (grouping)": "🏛️",
-    "local assistants":                "📍",
-    "local assistants (grouping)":     "📍",
-    "specialised service providers":   "🔧",
-    "paying agents":                   "💶",
-    "paying agents (grouping)":        "💶",
-    "trainees":                        "🎓",
-    "assistants to the vice-presidency/to the quaestorate": "⭐",
-}
+# ─── Helpers groupes ──────────────────────────────────────────────────────────
 
-TYPE_LABELS_FR = {
-    "accredited assistants":           "Accrédité·e (Bruxelles/Strasbourg)",
-    "accredited assistants (grouping)": "Accrédité·e mutualisé·e",
-    "local assistants":                "Assistant·e local·e (France)",
-    "local assistants (grouping)":     "Assistant·e local·e mutualisé·e",
-    "specialised service providers":   "Prestataire de services",
-    "paying agents":                   "Agent payeur",
-    "paying agents (grouping)":        "Agent payeur mutualisé",
-    "trainees":                        "Stagiaire",
-    "assistants to the vice-presidency/to the quaestorate": "Assistant·e VP/Questeur",
-}
+def _extract_group_key(item: dict) -> str:
+    """
+    Extrait la clé du groupe politique depuis un item MEP de l'API EP.
+    Essaie plusieurs champs selon la version de l'API.
+    """
+    # Champ direct (certaines versions de l'API)
+    for field in ("ep-core:politicalGroup", "politicalGroup", "hasGroup"):
+        val = item.get(field)
+        if isinstance(val, str):
+            # Peut être une URI ou juste l'acronyme
+            return val.rstrip("/").split("/")[-1].upper()
+        if isinstance(val, dict):
+            return (val.get("notation") or val.get("label") or "").upper()
+
+    # Champ imbriqué "hasMembership" ou "memberOf"
+    for field in ("hasMembership", "memberOf", "ep-core:hasMembership"):
+        memberships = item.get(field, [])
+        if isinstance(memberships, dict):
+            memberships = [memberships]
+        for m in memberships:
+            if isinstance(m, dict):
+                role = m.get("role", m.get("ep-core:role", ""))
+                if "political" in str(role).lower() or "group" in str(role).lower():
+                    org = m.get("organization", m.get("ep-core:organization", {}))
+                    if isinstance(org, dict):
+                        key = org.get("notation") or org.get("label") or ""
+                        return str(key).upper()
+                    if isinstance(org, str):
+                        return org.rstrip("/").split("/")[-1].upper()
+
+    return ""
+
+
+def format_group(group_key: str) -> tuple:
+    """Retourne (emoji, label) pour un groupe politique."""
+    key = group_key.upper().replace("_", "-")
+    emoji = GROUP_EMOJIS.get(key, "🏛️")
+    label = GROUP_LABELS.get(key, group_key if group_key else "Groupe inconnu")
+    return emoji, label
 
 
 # ─── Récupération des eurodéputés français ────────────────────────────────────
 
 def get_french_meps() -> dict:
-    """Retourne {mep_id: mep_name} pour tous les eurodéputés français actifs."""
+    """
+    Retourne {mep_id: {"name": str, "group": str}} pour tous les
+    eurodéputés français actifs.
+    """
     print("-> Récupération des eurodéputés français via EP Open Data API...")
 
     url = f"{EP_API_BASE}/meps"
@@ -110,7 +187,7 @@ def get_french_meps() -> dict:
     if items:
         first = items[0]
         print(f"  [DEBUG] Clés MEP : {list(first.keys())}")
-        print(f"  [DEBUG] Premier item : {json.dumps(first, ensure_ascii=False)[:600]}")
+        print(f"  [DEBUG] Premier item : {json.dumps(first, ensure_ascii=False)[:800]}")
 
     meps = {}
     for item in items:
@@ -127,10 +204,15 @@ def get_french_meps() -> dict:
             or f"MEP#{mep_id}"
         )
 
+        group_key = _extract_group_key(item)
+
         if mep_id and mep_id.isdigit():
-            meps[mep_id] = mep_name
+            meps[mep_id] = {"name": mep_name, "group": group_key}
 
     print(f"  {len(meps)} eurodéputés français trouvés")
+    # Affiche un échantillon de groupes détectés pour validation
+    sample = [(v["name"], v["group"]) for v in list(meps.values())[:5]]
+    print(f"  [DEBUG] Échantillon groupes : {sample}")
     return meps
 
 
@@ -199,7 +281,9 @@ def get_all_assistants_by_mep(french_mep_ids: set) -> dict:
                         key = (row["name"], row["type"], mep_id)
                         if key not in seen:
                             seen.add(key)
-                            mep_to_assistants[mep_id].append({"name": row["name"], "type": row["type"]})
+                            mep_to_assistants[mep_id].append(
+                                {"name": row["name"], "type": row["type"]}
+                            )
 
             if not rows or page_num > 30:
                 break
@@ -233,18 +317,33 @@ def save_state(state: dict) -> None:
 
 def _build_message(change: dict) -> dict:
     """Retourne {bluesky: str, telegram: str} pour un changement."""
-    emoji      = TYPE_EMOJIS.get(change["assistant_type"].lower(), "👤")
-    type_label = TYPE_LABELS_FR.get(change["assistant_type"].lower(), change["assistant_type"])
-    mep_url    = f"{EP_SITE_BASE}/meps/en/{change['mep_id']}/ASSISTANTS"
+    emoji_type  = TYPE_EMOJIS.get(change["assistant_type"].lower(), "👤")
+    type_label  = TYPE_LABELS_FR.get(change["assistant_type"].lower(), change["assistant_type"])
+    mep_url     = f"{EP_SITE_BASE}/meps/en/{change['mep_id']}/ASSISTANTS"
+
+    group_key         = change.get("mep_group", "")
+    group_emoji, group_label = format_group(group_key)
 
     if change["type"] == "arrival":
-        action_bs = f"{emoji} {change['assistant_name']} rejoint l'équipe de {change['mep_name']}"
-        action_tg = f"{emoji} <b>{change['assistant_name']}</b> rejoint l'équipe de <b>{change['mep_name']}</b>"
         header    = "🇪🇺 Nouvelle arrivée au Parlement européen"
+        action_bs = (
+            f"{emoji_type} {change['assistant_name']} rejoint l'équipe de "
+            f"{change['mep_name']} ({group_emoji} {group_label})"
+        )
+        action_tg = (
+            f"{emoji_type} <b>{change['assistant_name']}</b> rejoint l'équipe de "
+            f"<b>{change['mep_name']}</b> ({group_emoji} {group_label})"
+        )
     else:
-        action_bs = f"{emoji} {change['assistant_name']} quitte l'équipe de {change['mep_name']}"
-        action_tg = f"{emoji} <b>{change['assistant_name']}</b> quitte l'équipe de <b>{change['mep_name']}</b>"
         header    = "🇪🇺 Départ au Parlement européen"
+        action_bs = (
+            f"{emoji_type} {change['assistant_name']} quitte l'équipe de "
+            f"{change['mep_name']} ({group_emoji} {group_label})"
+        )
+        action_tg = (
+            f"{emoji_type} <b>{change['assistant_name']}</b> quitte l'équipe de "
+            f"<b>{change['mep_name']}</b> ({group_emoji} {group_label})"
+        )
 
     bluesky = f"{header}\n\n{action_bs}\n📋 {type_label}\n\n➡️ {mep_url}"
     if len(bluesky) > 300:
@@ -315,6 +414,7 @@ def main():
     if is_first_run:
         print("⚠️  Premier run : construction de l'état initial, aucun post")
 
+    # 1. Eurodéputés français — {mep_id: {"name": ..., "group": ...}}
     try:
         french_meps = get_french_meps()
     except Exception as e:
@@ -325,31 +425,41 @@ def main():
         print("Aucun MEP trouvé — vérifier l'API EP")
         sys.exit(1)
 
+    # 2. Assistants actuels
     try:
         current_by_mep = get_all_assistants_by_mep(set(french_meps.keys()))
     except Exception as e:
         print(f"Erreur fatale (assistants) : {e}")
         sys.exit(1)
 
+    # 3. Comparaison avec l'état précédent
     new_state = {}
     changes   = []
 
-    for mep_id, mep_name in french_meps.items():
+    for mep_id, mep_info in french_meps.items():
+        mep_name  = mep_info["name"]
+        mep_group = mep_info["group"]
         current_set = {(a["name"], a["type"]) for a in current_by_mep.get(mep_id, [])}
 
         new_state[mep_id] = {
             "name":       mep_name,
+            "group":      mep_group,
             "assistants": [{"name": n, "type": t} for n, t in sorted(current_set)],
         }
 
         if not is_first_run and mep_id in state:
             prev_set = {(a["name"], a["type"]) for a in state[mep_id].get("assistants", [])}
+            # Groupe : prendre celui du nouvel état (peut avoir changé)
             for name, atype in (current_set - prev_set):
-                changes.append({"type": "arrival",   "mep_id": mep_id, "mep_name": mep_name,
-                                 "assistant_name": name, "assistant_type": atype})
+                changes.append({
+                    "type": "arrival", "mep_id": mep_id, "mep_name": mep_name,
+                    "mep_group": mep_group, "assistant_name": name, "assistant_type": atype,
+                })
             for name, atype in (prev_set - current_set):
-                changes.append({"type": "departure", "mep_id": mep_id, "mep_name": mep_name,
-                                 "assistant_name": name, "assistant_type": atype})
+                changes.append({
+                    "type": "departure", "mep_id": mep_id, "mep_name": mep_name,
+                    "mep_group": mep_group, "assistant_name": name, "assistant_type": atype,
+                })
 
     print(f"\n{'─'*55}")
     print(f"  MEPs suivis : {len(new_state)}")
@@ -359,7 +469,8 @@ def main():
         print(f"\nPublication de {len(changes)} changement(s)...")
         for change in changes:
             arrow = "->" if change["type"] == "arrival" else "<-"
-            print(f"  [{change['type'].upper()}] {arrow} {change['assistant_name']} | {change['mep_name']}")
+            print(f"  [{change['type'].upper()}] {arrow} {change['assistant_name']} | "
+                  f"{change['mep_name']} ({change['mep_group']})")
             publish_change(change)
             time.sleep(3)
     else:
