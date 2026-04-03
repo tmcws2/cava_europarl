@@ -1,0 +1,52 @@
+name: Test Telegram Post
+
+on:
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: pip install requests
+
+      - name: Post test Telegram
+        env:
+          TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
+        run: |
+          python3 - <<'EOF'
+          import os, requests
+
+          token   = os.environ["TELEGRAM_TOKEN"]
+          channel = "@cavaparlement"
+
+          text = (
+              "🇪🇺 <b>Test — Ça va Parlement européen ?</b>\n\n"
+              "🏛️ <b>Jean Dupont</b> rejoint l'équipe de <b>Marie Martin</b>\n"
+              "📋 Accrédité·e (Bruxelles/Strasbourg)\n\n"
+              "➡️ <a href='https://www.europarl.europa.eu/meps/en/home'>Voir la fiche EP</a>\n\n"
+              "<i>Ceci est un message de test — à ignorer.</i>"
+          )
+
+          resp = requests.post(
+              f"https://api.telegram.org/bot{token}/sendMessage",
+              json={"chat_id": channel, "text": text, "parse_mode": "HTML"},
+              timeout=30,
+          )
+
+          print("Status :", resp.status_code)
+          print("Réponse :", resp.json())
+
+          if resp.ok:
+              print("✅ Message posté avec succès")
+          else:
+              print("❌ Erreur — voir la réponse ci-dessus")
+              exit(1)
+          EOF
