@@ -8,8 +8,6 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v4
-
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
@@ -17,36 +15,59 @@ jobs:
       - name: Install dependencies
         run: pip install requests
 
-      - name: Post test Telegram
+      - name: Diagnostic + Post Telegram
         env:
           TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
         run: |
           python3 - <<'EOF'
           import os, requests
 
-          token   = os.environ["TELEGRAM_TOKEN"]
-          channel = "@cavaparlement"
+          token = os.environ["TELEGRAM_TOKEN"]
+          base  = f"https://api.telegram.org/bot{token}"
 
+          # ── 1. Vérifier que le token est valide ───────────────────────────
+          print("=== 1. Vérification du token ===")
+          r = requests.get(f"{base}/getMe", timeout=10)
+          print("Status :", r.status_code)
+          data = r.json()
+          print("Réponse :", data)
+          if not data.get("ok"):
+              print("❌ Token invalide — vérifie TELEGRAM_TOKEN dans les secrets GitHub")
+              exit(1)
+          print(f"✅ Bot valide : @{data['result']['username']}")
+
+          # ── 2. Récupérer les updates pour trouver le vrai chat_id ─────────
+          print("\n=== 2. Recherche du chat_id réel du canal ===")
+          r = requests.get(f"{base}/getUpdates", timeout=10)
+          updates = r.json().get("result", [])
+          if updates:
+              for u in updates[-5:]:
+                  chat = u.get("channel_post", {}).get("chat") or u.get("message", {}).get("chat", {})
+                  if chat:
+                      print(f"  Chat trouvé → id={chat.get('id')} username=@{chat.get('username')} title={chat.get('title')}")
+          else:
+              print("  Aucun update récent — le bot n'a peut-être pas encore reçu de message")
+              print("  → Envoie /start ou un message dans le canal, puis relance ce workflow")
+
+          # ── 3. Tentative de post avec @username ───────────────────────────
+          print("\n=== 3. Tentative de post sur @cavaparlement ===")
           text = (
               "🇪🇺 <b>Test — Ça va Parlement européen ?</b>\n\n"
               "🏛️ <b>Jean Dupont</b> rejoint l'équipe de <b>Marie Martin</b>\n"
               "📋 Accrédité·e (Bruxelles/Strasbourg)\n\n"
-              "➡️ <a href='https://www.europarl.europa.eu/meps/en/home'>Voir la fiche EP</a>\n\n"
-              "<i>Ceci est un message de test — à ignorer.</i>"
+              "➡️ <a href='https://www.europarl.europa.eu'>Voir la fiche EP</a>\n\n"
+              "<i>Ceci est un message de test.</i>"
           )
-
-          resp = requests.post(
-              f"https://api.telegram.org/bot{token}/sendMessage",
-              json={"chat_id": channel, "text": text, "parse_mode": "HTML"},
+          r = requests.post(
+              f"{base}/sendMessage",
+              json={"chat_id": "@cavaparlement", "text": text, "parse_mode": "HTML"},
               timeout=30,
           )
-
-          print("Status :", resp.status_code)
-          print("Réponse :", resp.json())
-
-          if resp.ok:
-              print("✅ Message posté avec succès")
+          print("Status :", r.status_code)
+          print("Réponse :", r.json())
+          if r.ok:
+              print("✅ Posté avec succès sur @cavaparlement")
           else:
-              print("❌ Erreur — voir la réponse ci-dessus")
+              print("❌ Échec — consulte les étapes 1 et 2 pour corriger")
               exit(1)
           EOF
