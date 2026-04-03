@@ -13,6 +13,8 @@ import time
 import re
 
 import requests
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
 from bs4 import BeautifulSoup
 from atproto import Client
 
@@ -36,6 +38,24 @@ API_HEADERS = {
 }
 
 ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+
+# ─── Session HTTP avec retry automatique ──────────────────────────────────────
+
+def make_session() -> requests.Session:
+    """Crée une session requests avec retry exponentiel (3 tentatives)."""
+    session = requests.Session()
+    retry = Retry(
+        total=3,
+        backoff_factor=2,
+        status_forcelist=[429, 500, 502, 503, 504],
+        allowed_methods=["GET"],
+    )
+    adapter = HTTPAdapter(max_retries=retry)
+    session.mount("https://", adapter)
+    session.mount("http://",  adapter)
+    return session
+
+SESSION = make_session()
 
 # Emojis par type d'assistant
 TYPE_EMOJIS = {
@@ -83,7 +103,7 @@ def get_french_meps() -> dict:
         "offset":                    0,
     }
 
-    resp = requests.get(url, params=params, headers=API_HEADERS, timeout=30)
+    resp = SESSION.get(url, params=params, headers=API_HEADERS, timeout=60)
     resp.raise_for_status()
     data = resp.json()
 
@@ -177,7 +197,7 @@ def _fetch_assistants_for_letter(letter: str, offset: int = 0) -> list[dict]:
         params["offset"] = offset
 
     try:
-        resp = requests.get(url, params=params, headers=HEADERS, timeout=30)
+        resp = SESSION.get(url, params=params, headers=HEADERS, timeout=60)
         resp.raise_for_status()
     except Exception as e:
         print(f"  [ERREUR] Lettre {letter} offset {offset} : {e}")
