@@ -1,1 +1,47 @@
+name: Daily MEP Staff Check
 
+on:
+  schedule:
+    # Tous les jours à 8h00 UTC (9h Paris heure d'hiver, 10h en été)
+    - cron: '0 8 * * *'
+  # Déclenchement manuel depuis l'interface GitHub Actions
+  workflow_dispatch:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write   # nécessaire pour commiter state.json
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # Evite la désactivation automatique des workflows inactifs (GitHub les
+      # coupe après 60 jours sans commit). Cette action crée un commit vide
+      # toutes les 50 jours si le repo est par ailleurs silencieux.
+      - name: Keep workflow alive
+        uses: gautamkrishnar/keepalive-workflow@v2
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run bot
+        env:
+          BLUESKY_PASSWORD: ${{ secrets.BLUESKY_PASSWORD }}
+        run: python bot.py
+
+      - name: Commit updated state
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add state.json
+          # Ne commite que si state.json a réellement changé
+          git diff --staged --quiet \
+            || git commit -m "chore: update state $(date -u +'%Y-%m-%d')"
+          git push
