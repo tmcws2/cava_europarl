@@ -1,5 +1,5 @@
 """
-CavaEuroparl - Bot Bluesky suivant les mouvements de collaborateurs
+CavaEuroparl - Bot Bluesky + Telegram suivant les mouvements de collaborateurs
 des eurodéputés français au Parlement européen.
 
 Source MEPs  : EP Open Data API (data.europarl.europa.eu/api/v2)
@@ -22,8 +22,11 @@ from atproto import Client
 
 BLUESKY_HANDLE   = "cavaeuroparl.bsky.social"
 BLUESKY_PASSWORD = os.environ.get("BLUESKY_PASSWORD")
-STATE_FILE       = "state.json"
 
+TELEGRAM_TOKEN   = os.environ.get("TELEGRAM_TOKEN")
+TELEGRAM_CHANNEL = "@cavaparlement"
+
+STATE_FILE   = "state.json"
 EP_API_BASE  = "https://data.europarl.europa.eu/api/v2"
 EP_SITE_BASE = "https://www.europarl.europa.eu"
 CURRENT_TERM = 10   # législature 2024-2029
@@ -42,7 +45,6 @@ ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
 # ─── Session HTTP avec retry automatique ──────────────────────────────────────
 
 def make_session() -> requests.Session:
-    """Crée une session requests avec retry exponentiel (3 tentatives)."""
     session = requests.Session()
     retry = Retry(
         total=3,
@@ -57,7 +59,8 @@ def make_session() -> requests.Session:
 
 SESSION = make_session()
 
-# Emojis par type d'assistant
+# ─── Types : emojis et labels ─────────────────────────────────────────────────
+
 TYPE_EMOJIS = {
     "accredited assistants":           "🏛️",
     "accredited assistants (grouping)": "🏛️",
@@ -70,7 +73,6 @@ TYPE_EMOJIS = {
     "assistants to the vice-presidency/to the quaestorate": "⭐",
 }
 
-# Labels français par type
 TYPE_LABELS_FR = {
     "accredited assistants":           "Accrédité·e (Bruxelles/Strasbourg)",
     "accredited assistants (grouping)": "Accrédité·e mutualisé·e",
@@ -87,50 +89,41 @@ TYPE_LABELS_FR = {
 # ─── Récupération des eurodéputés français ────────────────────────────────────
 
 def get_french_meps() -> dict:
-    """
-    Retourne un dict {mep_id (str): mep_name (str)} pour tous les
-    eurodéputés français du terme en cours.
-    """
-    print("→ Récupération des eurodéputés français via EP Open Data API...")
+    """Retourne {mep_id: mep_name} pour tous les eurodéputés français actifs."""
+    print("-> Récupération des eurodéputés français via EP Open Data API...")
 
     url = f"{EP_API_BASE}/meps"
     params = {
         "country-of-representation": "FR",
-        "format":                    "application/ld+json",
-        "parliamentary-term":        CURRENT_TERM,
-        "json-layout":               "framed",
-        "limit":                     200,
-        "offset":                    0,
+        "format":             "application/ld+json",
+        "parliamentary-term": CURRENT_TERM,
+        "json-layout":        "framed",
+        "limit":              200,
+        "offset":             0,
     }
 
     resp = SESSION.get(url, params=params, headers=API_HEADERS, timeout=60)
     resp.raise_for_status()
     data = resp.json()
 
-    # DEBUG (premier run) – affiche la structure pour valider le parsing
     items = data.get("data", [])
     if items:
         first = items[0]
-        print(f"  [DEBUG] Clés d'un item MEP : {list(first.keys())}")
+        print(f"  [DEBUG] Clés MEP : {list(first.keys())}")
         print(f"  [DEBUG] Premier item : {json.dumps(first, ensure_ascii=False)[:600]}")
 
     meps = {}
     for item in items:
-        # ID numérique — extrait de l'URI @id ou du champ identifier
         at_id  = item.get("@id", "")
         mep_id = at_id.rstrip("/").split("/")[-1] if at_id else ""
         if not mep_id or not mep_id.isdigit():
             mep_id = str(item.get("identifier", ""))
 
-        # Nom — plusieurs champs possibles selon la version de l'API
         mep_name = (
             item.get("label")
             or item.get("foaf:name")
             or item.get("skos:prefLabel")
-            or (
-                f"{item.get('foaf:givenName', '')} "
-                f"{item.get('foaf:familyName', '')}".strip()
-            )
+            or f"{item.get('foaf:givenName', '')} {item.get('foaf:familyName', '')}".strip()
             or f"MEP#{mep_id}"
         )
 
@@ -141,20 +134,15 @@ def get_french_meps() -> dict:
     return meps
 
 
-# ─── Récupération des assistants (scraping EP website) ────────────────────────
+# ─── Récupération des assistants ──────────────────────────────────────────────
 
-def _parse_assistants_table(soup: BeautifulSoup) -> list[dict]:
-    """
-    Parse le tableau standard de la page /meps/en/assistants.
-    Retourne une liste de {assistant_name, assistant_type, mep_ids}.
-    """
+def _parse_assistants_table(soup: BeautifulSoup) -> list:
     results = []
     table = soup.find("table")
     if not table:
         return results
 
-    rows = table.find_all("tr")
-    for row in rows[1:]:   # on passe le header
+    for row in table.find_all("tr")[1:]:
         cols = row.find_all("td")
         if len(cols) < 3:
             continue
@@ -162,37 +150,21 @@ def _parse_assistants_table(soup: BeautifulSoup) -> list[dict]:
         assistant_name = cols[0].get_text(separator=" ", strip=True)
         assistant_type = cols[1].get_text(separator=" ", strip=True)
 
-        # Colonne 3 : liens vers les profils MEP → extraction des IDs
-        mep_links = cols[2].find_all("a", href=True)
         mep_ids = []
-        for a in mep_links:
+        for a in cols[2].find_all("a", href=True):
             m = re.search(r"/meps/en/(\d+)", a["href"])
             if m:
                 mep_ids.append(m.group(1))
 
         if assistant_name and mep_ids:
-            results.append({
-                "name":    assistant_name,
-                "type":    assistant_type,
-                "mep_ids": mep_ids,
-            })
+            results.append({"name": assistant_name, "type": assistant_type, "mep_ids": mep_ids})
 
     return results
 
 
-def _fetch_assistants_for_letter(letter: str, offset: int = 0) -> list[dict]:
-    """
-    Récupère une page de résultats pour une lettre donnée.
-    Retourne la liste parsée + un bool indiquant s'il y a une page suivante.
-    """
+def _fetch_assistants_for_letter(letter: str, offset: int = 0):
     url = f"{EP_SITE_BASE}/meps/en/assistants"
-    params = {
-        "letter":      letter,
-        "searchType":  "BY_ASSISTANT",
-        "assistantType": "",
-        "name":        "",
-    }
-    # On tente un offset si ce n'est pas la première page
+    params = {"letter": letter, "searchType": "BY_ASSISTANT", "assistantType": "", "name": ""}
     if offset > 0:
         params["offset"] = offset
 
@@ -203,28 +175,19 @@ def _fetch_assistants_for_letter(letter: str, offset: int = 0) -> list[dict]:
         print(f"  [ERREUR] Lettre {letter} offset {offset} : {e}")
         return [], False
 
-    soup   = BeautifulSoup(resp.text, "html.parser")
-    rows   = _parse_assistants_table(soup)
-
-    # Détecte si un bouton "Load more" est présent
+    soup     = BeautifulSoup(resp.text, "html.parser")
+    rows     = _parse_assistants_table(soup)
     has_more = bool(soup.find(string=re.compile(r"Load more", re.I)))
-
     return rows, has_more
 
 
 def get_all_assistants_by_mep(french_mep_ids: set) -> dict:
-    """
-    Scanne toutes les lettres A-Z de la page assistants et retourne
-    un dict {mep_id: [{name, type}, ...]} filtré aux seuls eurodéputés français.
-    """
-    print("→ Scan des assistants (A-Z)...")
+    print("-> Scan des assistants (A-Z)...")
     mep_to_assistants = {mid: [] for mid in french_mep_ids}
-    seen = set()   # évite les doublons (name, type, mep_id)
+    seen = set()
 
     for letter in ALPHABET:
-        offset   = 0
-        has_more = True
-        page_num = 0
+        offset, has_more, page_num = 0, True, 0
 
         while has_more:
             rows, has_more = _fetch_assistants_for_letter(letter, offset)
@@ -236,28 +199,18 @@ def get_all_assistants_by_mep(french_mep_ids: set) -> dict:
                         key = (row["name"], row["type"], mep_id)
                         if key not in seen:
                             seen.add(key)
-                            mep_to_assistants[mep_id].append({
-                                "name": row["name"],
-                                "type": row["type"],
-                            })
+                            mep_to_assistants[mep_id].append({"name": row["name"], "type": row["type"]})
 
-            if not rows:
+            if not rows or page_num > 30:
                 break
-
-            # Pagination : on essaie d'avancer par tranches de 10
             if has_more:
                 offset += 10
                 time.sleep(0.3)
 
-            # Protection anti-boucle infinie
-            if page_num > 30:
-                print(f"  [WARN] Lettre {letter} : pagination stoppée après 30 pages")
-                break
-
         time.sleep(0.2)
 
     total = sum(len(v) for v in mep_to_assistants.values())
-    print(f"  {total} entrées assistants trouvées pour les eurodéputés français")
+    print(f"  {total} entrées trouvées pour les eurodéputés français")
     return mep_to_assistants
 
 
@@ -276,40 +229,77 @@ def save_state(state: dict) -> None:
     print(f"  State sauvegardé ({len(state)} MEPs)")
 
 
-# ─── Bluesky ──────────────────────────────────────────────────────────────────
+# ─── Formatage des posts ──────────────────────────────────────────────────────
 
-def format_post(change: dict) -> str:
+def _build_message(change: dict) -> dict:
+    """Retourne {bluesky: str, telegram: str} pour un changement."""
     emoji      = TYPE_EMOJIS.get(change["assistant_type"].lower(), "👤")
     type_label = TYPE_LABELS_FR.get(change["assistant_type"].lower(), change["assistant_type"])
     mep_url    = f"{EP_SITE_BASE}/meps/en/{change['mep_id']}/ASSISTANTS"
 
     if change["type"] == "arrival":
-        text = (
-            f"🇪🇺 Nouvelle arrivée au Parlement européen\n\n"
-            f"{emoji} {change['assistant_name']} rejoint l'équipe de "
-            f"{change['mep_name']}\n"
-            f"📋 {type_label}\n\n"
-            f"➡️ {mep_url}"
-        )
+        action_bs = f"{emoji} {change['assistant_name']} rejoint l'équipe de {change['mep_name']}"
+        action_tg = f"{emoji} <b>{change['assistant_name']}</b> rejoint l'équipe de <b>{change['mep_name']}</b>"
+        header    = "🇪🇺 Nouvelle arrivée au Parlement européen"
     else:
-        text = (
-            f"🇪🇺 Départ au Parlement européen\n\n"
-            f"{emoji} {change['assistant_name']} quitte l'équipe de "
-            f"{change['mep_name']}\n"
-            f"📋 {type_label}\n\n"
-            f"➡️ {mep_url}"
-        )
+        action_bs = f"{emoji} {change['assistant_name']} quitte l'équipe de {change['mep_name']}"
+        action_tg = f"{emoji} <b>{change['assistant_name']}</b> quitte l'équipe de <b>{change['mep_name']}</b>"
+        header    = "🇪🇺 Départ au Parlement européen"
 
-    if len(text) > 300:
-        text = text[:297] + "..."
-    return text
+    bluesky = f"{header}\n\n{action_bs}\n📋 {type_label}\n\n➡️ {mep_url}"
+    if len(bluesky) > 300:
+        bluesky = bluesky[:297] + "..."
 
+    telegram = (
+        f"{header}\n\n"
+        f"{action_tg}\n"
+        f"📋 {type_label}\n\n"
+        f'➡️ <a href="{mep_url}">Voir la fiche EP</a>'
+    )
+
+    return {"bluesky": bluesky, "telegram": telegram}
+
+
+# ─── Publication ──────────────────────────────────────────────────────────────
 
 def post_to_bluesky(text: str) -> None:
     client = Client()
     client.login(BLUESKY_HANDLE, BLUESKY_PASSWORD)
     client.send_post(text=text)
-    print(f"  ✓ Posté ({len(text)} car.)")
+    print(f"  ✓ Bluesky ({len(text)} car.)")
+
+
+def post_to_telegram(html: str) -> None:
+    url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
+    payload = {
+        "chat_id":    TELEGRAM_CHANNEL,
+        "text":       html,
+        "parse_mode": "HTML",
+        "disable_web_page_preview": False,
+    }
+    resp = requests.post(url, json=payload, timeout=30)
+    resp.raise_for_status()
+    print(f"  ✓ Telegram ({len(html)} car.)")
+
+
+def publish_change(change: dict) -> None:
+    messages = _build_message(change)
+
+    if BLUESKY_PASSWORD:
+        try:
+            post_to_bluesky(messages["bluesky"])
+        except Exception as e:
+            print(f"  ✗ Bluesky : {e}")
+    else:
+        print("  ⚠️  BLUESKY_PASSWORD absent")
+
+    if TELEGRAM_TOKEN:
+        try:
+            post_to_telegram(messages["telegram"])
+        except Exception as e:
+            print(f"  ✗ Telegram : {e}")
+    else:
+        print("  ⚠️  TELEGRAM_TOKEN absent")
 
 
 # ─── Main ─────────────────────────────────────────────────────────────────────
@@ -323,33 +313,29 @@ def main():
     is_first_run = len(state) == 0
 
     if is_first_run:
-        print("⚠️  Premier run : construction de l'état initial, aucun post Bluesky")
+        print("⚠️  Premier run : construction de l'état initial, aucun post")
 
-    # 1. Eurodéputés français
     try:
-        french_meps = get_french_meps()   # {mep_id: mep_name}
+        french_meps = get_french_meps()
     except Exception as e:
-        print(f"Erreur fatale lors de la récupération des MEPs : {e}")
+        print(f"Erreur fatale (MEPs) : {e}")
         sys.exit(1)
 
     if not french_meps:
         print("Aucun MEP trouvé — vérifier l'API EP")
         sys.exit(1)
 
-    # 2. Assistants actuels
     try:
         current_by_mep = get_all_assistants_by_mep(set(french_meps.keys()))
     except Exception as e:
-        print(f"Erreur fatale lors du scan des assistants : {e}")
+        print(f"Erreur fatale (assistants) : {e}")
         sys.exit(1)
 
-    # 3. Construction du nouvel état + détection des changements
     new_state = {}
     changes   = []
 
     for mep_id, mep_name in french_meps.items():
-        current_assistants = current_by_mep.get(mep_id, [])
-        current_set        = {(a["name"], a["type"]) for a in current_assistants}
+        current_set = {(a["name"], a["type"]) for a in current_by_mep.get(mep_id, [])}
 
         new_state[mep_id] = {
             "name":       mep_name,
@@ -358,52 +344,28 @@ def main():
 
         if not is_first_run and mep_id in state:
             prev_set = {(a["name"], a["type"]) for a in state[mep_id].get("assistants", [])}
-
             for name, atype in (current_set - prev_set):
-                changes.append({
-                    "type":           "arrival",
-                    "mep_id":         mep_id,
-                    "mep_name":       mep_name,
-                    "assistant_name": name,
-                    "assistant_type": atype,
-                })
-
+                changes.append({"type": "arrival",   "mep_id": mep_id, "mep_name": mep_name,
+                                 "assistant_name": name, "assistant_type": atype})
             for name, atype in (prev_set - current_set):
-                changes.append({
-                    "type":           "departure",
-                    "mep_id":         mep_id,
-                    "mep_name":       mep_name,
-                    "assistant_name": name,
-                    "assistant_type": atype,
-                })
+                changes.append({"type": "departure", "mep_id": mep_id, "mep_name": mep_name,
+                                 "assistant_name": name, "assistant_type": atype})
 
-    # 4. Résumé
     print(f"\n{'─'*55}")
-    print(f"  MEPs suivis   : {len(new_state)}")
-    print(f"  Changements   : {len(changes)}")
+    print(f"  MEPs suivis : {len(new_state)}")
+    print(f"  Changements : {len(changes)}")
 
-    # 5. Posts Bluesky
     if changes:
-        if not BLUESKY_PASSWORD:
-            print("\n⚠️  BLUESKY_PASSWORD absent — affichage seul :")
-            for c in changes:
-                arrow = "→" if c["type"] == "arrival" else "←"
-                print(f"  [{c['type'].upper()}] {arrow} {c['assistant_name']} "
-                      f"({c['assistant_type']}) | {c['mep_name']}")
-        else:
-            print(f"\nPublication de {len(changes)} changement(s) sur Bluesky...")
-            for change in changes:
-                post_text = format_post(change)
-                try:
-                    post_to_bluesky(post_text)
-                    time.sleep(3)
-                except Exception as e:
-                    print(f"  Erreur lors du post : {e}")
+        print(f"\nPublication de {len(changes)} changement(s)...")
+        for change in changes:
+            arrow = "->" if change["type"] == "arrival" else "<-"
+            print(f"  [{change['type'].upper()}] {arrow} {change['assistant_name']} | {change['mep_name']}")
+            publish_change(change)
+            time.sleep(3)
     else:
         if not is_first_run:
             print("\n  Aucun changement aujourd'hui.")
 
-    # 6. Sauvegarde
     save_state(new_state)
     print("\n✅ Terminé")
 
